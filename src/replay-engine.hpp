@@ -87,6 +87,7 @@ private:
 	void rebuildCaptures();
 	void writeBridgeState() const;
 	void pollBridgeCommand();
+	void cleanupTemporaryMedia();
 
 	static ReplayEngine *instance_;
 

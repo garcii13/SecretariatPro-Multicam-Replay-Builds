@@ -8,6 +8,7 @@
 #include <util/platform.h>
 
 #include <QMetaObject>
+#include <QDir>
 #include <QString>
 
 #include <algorithm>
@@ -96,9 +97,8 @@ ReplayEngine::ReplayEngine(QObject *parent) : QObject(parent), settings_(Setting
 
 ReplayEngine::~ReplayEngine()
 {
-	out();
-	stopBuffers();
-	releaseMedia();
+	bridgeCommandTimer_.stop();
+	cleanupTemporaryMedia();
 	if (previousScene_) {
 		obs_source_release(previousScene_);
 		previousScene_ = nullptr;
@@ -349,6 +349,7 @@ void ReplayEngine::writeBridgeState() const
 	obs_data_set_int(data, "camera_count", static_cast<long long>(settings_.sourceUuids.size()));
 	obs_data_set_int(data, "timeline_segments", static_cast<long long>(timeline_.segments().size()));
 	obs_data_set_string(data, "last_command_id", lastCommandId_.c_str());
+	obs_data_set_int(data, "window_start_ms", timeline_.windowStartMs());
 	obs_data_set_string(data, "status", bridgeStatus_.c_str());
 	obs_data_set_string(data, "error", bridgeError_.c_str());
 	const auto now = std::chrono::duration_cast<std::chrono::milliseconds>(
@@ -374,6 +375,8 @@ void ReplayEngine::writeBridgeState() const
 		obs_data_set_int(item, "camera", static_cast<long long>(segment.cameraIndex + 1));
 		obs_data_set_int(item, "duration_seconds", static_cast<long long>(segment.sourceDurationMs() / 1000));
 		obs_data_set_int(item, "speed_percent", static_cast<long long>(segment.speedPercent));
+		obs_data_set_int(item, "in_ms", segment.inMs);
+		obs_data_set_int(item, "out_ms", segment.outMs);
 		obs_data_array_push_back(segments, item);
 		obs_data_release(item);
 	}
@@ -382,6 +385,25 @@ void ReplayEngine::writeBridgeState() const
 	(void)obs_data_save_json_safe(data, path, "tmp", "bak");
 	obs_data_release(data);
 	bfree(path);
+}
+
+void ReplayEngine::cleanupTemporaryMedia()
+{
+	out();
+	stopBuffers();
+	releaseMedia();
+	timeline_.clear();
+	savedPaths_.assign(captures_.size(), {});
+	eventReady_ = false;
+	const auto path = SettingsStore::replayDirectory();
+	if (!path.empty()) {
+		QDir directory(QString::fromStdString(path));
+		for (const auto &name : directory.entryList({"SP-CAM*.mkv", "SP-CAM*.mp4"}, QDir::Files | QDir::NoSymLinks))
+			if (!directory.remove(name))
+				obs_log(LOG_WARNING, "Could not remove replay buffer file: %s", name.toUtf8().constData());
+	}
+	emit eventStateChanged(false);
+	emit timelineChanged();
 }
 
 void ReplayEngine::pollBridgeCommand()
@@ -417,6 +439,9 @@ void ReplayEngine::pollBridgeCommand()
 			obs_data_array_release(segments);
 		if (ok && obs_data_get_bool(command, "play_now"))
 			ok = take();
+	} else if (action == "cleanup") {
+		cleanupTemporaryMedia();
+		ok = true;
 	} else if (action == "clear_timeline") {
 		clearTimeline();
 		ok = true;

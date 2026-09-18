@@ -1,5 +1,11 @@
 # Changelog
 
+## 0.5.1 — Composer session cleanup
+
+- Releases replay media and clears temporary camera files on shutdown or when Live closes.
+- Exposes exact timeline offsets so each event video preserves camera cuts and playback speeds.
+
+
 ## 0.5.0 — Quick compositions
 
 - Accepts atomic multicamera timelines from Secretariat Pro Live through the local bridge.
