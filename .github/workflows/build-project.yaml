@@ -75,6 +75,21 @@ jobs:
             echo "pluginName=${plugin_name}" >> $GITHUB_OUTPUT
           fi
 
+      - name: Prepare Draft Release 🛫
+        if: github.ref_type == 'tag'
+        env:
+          GH_TOKEN: ${{ github.token }}
+          PLUGIN_NAME: ${{ steps.setup.outputs.pluginName }}
+        run: |
+          : Prepare Draft Release 🛫
+          release_args=(--draft --title "${PLUGIN_NAME} ${GITHUB_REF_NAME}")
+          if [[ ${GITHUB_REF_NAME} == *-beta* || ${GITHUB_REF_NAME} == *-rc* ]]; then
+            release_args+=(--prerelease)
+          fi
+          gh release view "${GITHUB_REF_NAME}" >/dev/null 2>&1 || \
+            gh release create "${GITHUB_REF_NAME}" "${release_args[@]}" \
+              --notes 'Beta privada. Paquetes sin firma pública; consulta README.md para la instalación.'
+
   macos-build:
     name: Build for macOS 🍏
     runs-on: macos-15
@@ -160,18 +175,19 @@ jobs:
           codesignUser: ${{ secrets.MACOS_NOTARIZATION_USERNAME }}
           codesignPass: ${{ secrets.MACOS_NOTARIZATION_PASSWORD }}
 
-      - name: Upload Artifacts 📡
-        uses: actions/upload-artifact@v4
-        with:
-          name: ${{ steps.setup.outputs.pluginName }}-${{ steps.setup.outputs.pluginVersion }}-macos-universal-${{ needs.check-event.outputs.commitHash }}
-          path: ${{ github.workspace }}/release/${{ steps.setup.outputs.pluginName }}-${{ steps.setup.outputs.pluginVersion }}-macos-universal.*
-
-      - name: Upload Debug Symbol Artifacts 🪲
-        uses: actions/upload-artifact@v4
-        if: ${{ needs.check-event.outputs.config == 'Release' }}
-        with:
-          name: ${{ steps.setup.outputs.pluginName }}-${{ steps.setup.outputs.pluginVersion }}-macos-universal-${{ needs.check-event.outputs.commitHash }}-dSYMs
-          path: ${{ github.workspace }}/release/${{ steps.setup.outputs.pluginName }}-${{ steps.setup.outputs.pluginVersion }}-macos-universal-dSYMs.*
+      - name: Upload macOS Installer to Release 📡
+        if: github.ref_type == 'tag'
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          : Upload macOS Installer to Release 📡
+          setopt null_glob
+          local -a packages=(release/${{ steps.setup.outputs.pluginName }}-${{ steps.setup.outputs.pluginVersion }}-macos-universal.(pkg|tar.xz))
+          if (( ! #packages )); then
+            print -u2 'No se encontró el paquete macOS generado.'
+            exit 1
+          fi
+          gh release upload "${GITHUB_REF_NAME}" "${packages[@]}" --clobber
 
       - uses: actions/cache/save@v4
         if: github.event_name != 'pull_request' && steps.ccache-cache.outputs.cache-hit != 'true'
@@ -295,8 +311,16 @@ jobs:
           config: ${{ needs.check-event.outputs.config }}
           package: ${{ fromJSON(needs.check-event.outputs.package) }}
 
-      - name: Upload Artifacts 📡
-        uses: actions/upload-artifact@v4
-        with:
-          name: ${{ steps.setup.outputs.pluginName }}-${{ steps.setup.outputs.pluginVersion }}-windows-x64-${{ needs.check-event.outputs.commitHash }}
-          path: ${{ github.workspace }}/release/${{ steps.setup.outputs.pluginName }}-${{ steps.setup.outputs.pluginVersion }}-windows-x64*.*
+      - name: Upload Windows Installer to Release 📡
+        if: github.ref_type == 'tag'
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          $Packages = Get-ChildItem -Path release -File | Where-Object {
+            $_.Name -like '${{ steps.setup.outputs.pluginName }}-${{ steps.setup.outputs.pluginVersion }}-windows-x64*.exe' -or
+            $_.Name -like '${{ steps.setup.outputs.pluginName }}-${{ steps.setup.outputs.pluginVersion }}-windows-x64*.zip'
+          }
+          if (-not $Packages) {
+            throw 'No se encontró el paquete Windows generado.'
+          }
+          gh release upload $Env:GITHUB_REF_NAME @($Packages.FullName) --clobber

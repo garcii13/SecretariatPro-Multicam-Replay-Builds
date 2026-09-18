@@ -90,9 +90,9 @@ The macOS package must be signed and notarised before public distribution. Unsig
 The included GitHub Actions workflow builds a Windows x64 ZIP and a macOS universal PKG. This is the simplest route when you need both operating systems:
 
 1. Create an empty GitHub repository and upload the complete project, including the `.github` directory. GitHub Desktop is the easiest way to preserve that directory.
-2. Open the repository on GitHub and choose **Actions → Dispatch → Run workflow**.
+2. Create and push a semantic beta tag such as `0.4.0-beta2`.
 3. Wait for both **Build for macOS** and **Build for Windows** to finish with a green check.
-4. Open the completed workflow run and download both files from **Artifacts**.
+4. Open the draft version under **Releases** and download the Windows and macOS installers.
 
 Manual builds are intentionally unsigned beta packages. The Windows artifact contains the normal OBS plugin directory; extract it into `%APPDATA%\obs-studio\plugins`. On macOS, open the PKG and, if Gatekeeper blocks this private beta, allow it from **System Settings → Privacy & Security**. Public distribution requires an Apple Developer signature and notarisation.
 
