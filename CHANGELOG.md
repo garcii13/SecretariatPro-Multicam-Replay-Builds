@@ -4,6 +4,7 @@
 
 - Removed the duplicate deletion of the replay widget after OBS removes its dock.
 - Keep widget ownership with OBS after successful registration and make repeated shutdown callbacks harmless.
+- Fix literal quotes in macOS package identifiers and versions so they match the installer distribution metadata.
 
 ## 0.4.0 — SecretariatPro bridge
 
