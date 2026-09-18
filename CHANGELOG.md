@@ -1,5 +1,10 @@
 # Changelog
 
+## 0.4.1 — fix crash on OBS exit
+
+- Removed the duplicate deletion of the replay widget after OBS removes its dock.
+- Keep widget ownership with OBS after successful registration and make repeated shutdown callbacks harmless.
+
 ## 0.4.0 — SecretariatPro bridge
 
 - Added an atomic JSON state bridge so SecretariatPro can detect the plugin, follow multicamera saves and register every saved angle.

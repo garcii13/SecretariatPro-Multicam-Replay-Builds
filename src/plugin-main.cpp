@@ -15,7 +15,6 @@ OBS_MODULE_USE_DEFAULT_LOCALE(PLUGIN_NAME, "en-US")
 namespace {
 
 sp::replay::ReplayEngine *engine = nullptr;
-sp::replay::ReplayDock *dock = nullptr;
 sp::replay::ReplayHotkeys *hotkeys = nullptr;
 bool uiCreated = false;
 
@@ -28,11 +27,10 @@ void createUi()
 		return;
 
 	engine = new sp::replay::ReplayEngine;
-	dock = new sp::replay::ReplayDock(engine, mainWindow);
+	auto *dock = new sp::replay::ReplayDock(engine, mainWindow);
 	if (!obs_frontend_add_dock_by_id("secretariatpro_multicam_replay", "SecretariatPro Replay", dock)) {
 		delete dock;
 		delete engine;
-		dock = nullptr;
 		engine = nullptr;
 		obs_log(LOG_ERROR, "could not register the replay dock");
 		return;
@@ -45,14 +43,14 @@ void destroyUi()
 {
 	if (!uiCreated)
 		return;
+	uiCreated = false;
 	delete hotkeys;
 	hotkeys = nullptr;
+	// Registration transfers widget ownership to OBS/Qt. Removing the dock
+	// destroys its widget too; deleting it again causes a crash on exit.
 	obs_frontend_remove_dock("secretariatpro_multicam_replay");
-	delete dock;
 	delete engine;
-	dock = nullptr;
 	engine = nullptr;
-	uiCreated = false;
 }
 
 void frontendEvent(enum obs_frontend_event event, void *)
