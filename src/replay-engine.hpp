@@ -86,6 +86,7 @@ private:
 	void setActiveCamera(std::size_t cameraIndex);
 	void rebuildCaptures();
 	void writeBridgeState() const;
+	void pollBridgeCommand();
 
 	static ReplayEngine *instance_;
 
@@ -96,6 +97,7 @@ private:
 	obs_source_t *previousScene_{nullptr};
 	Timeline timeline_;
 	QTimer playbackTimer_;
+	QTimer bridgeCommandTimer_;
 	std::size_t segmentIndex_{0};
 	std::size_t activeCamera_{0};
 	mutable std::mutex mediaMutex_;
@@ -105,6 +107,7 @@ private:
 	bool playing_{false};
 	bool bridgeLoaded_{true};
 	std::uint64_t eventSerial_{0};
+	std::string lastCommandId_;
 	std::string bridgeStatus_;
 	std::string bridgeError_;
 };

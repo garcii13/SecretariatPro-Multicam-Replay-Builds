@@ -87,6 +87,9 @@ ReplayEngine::ReplayEngine(QObject *parent) : QObject(parent), settings_(Setting
 	playbackTimer_.setInterval(20);
 	playbackTimer_.setTimerType(Qt::PreciseTimer);
 	connect(&playbackTimer_, &QTimer::timeout, this, &ReplayEngine::pollPlayback);
+	bridgeCommandTimer_.setInterval(150);
+	connect(&bridgeCommandTimer_, &QTimer::timeout, this, &ReplayEngine::pollBridgeCommand);
+	bridgeCommandTimer_.start();
 	bridgeStatus_ = "Plugin listo";
 	writeBridgeState();
 }
@@ -345,6 +348,7 @@ void ReplayEngine::writeBridgeState() const
 	obs_data_set_int(data, "active_camera", static_cast<long long>(activeCamera_));
 	obs_data_set_int(data, "camera_count", static_cast<long long>(settings_.sourceUuids.size()));
 	obs_data_set_int(data, "timeline_segments", static_cast<long long>(timeline_.segments().size()));
+	obs_data_set_string(data, "last_command_id", lastCommandId_.c_str());
 	obs_data_set_string(data, "status", bridgeStatus_.c_str());
 	obs_data_set_string(data, "error", bridgeError_.c_str());
 	const auto now = std::chrono::duration_cast<std::chrono::milliseconds>(
@@ -364,9 +368,63 @@ void ReplayEngine::writeBridgeState() const
 	}
 	obs_data_set_array(data, "saved_paths", paths);
 	obs_data_array_release(paths);
+	obs_data_array_t *segments = obs_data_array_create();
+	for (const auto &segment : timeline_.segments()) {
+		obs_data_t *item = obs_data_create();
+		obs_data_set_int(item, "camera", static_cast<long long>(segment.cameraIndex + 1));
+		obs_data_set_int(item, "duration_seconds", static_cast<long long>(segment.sourceDurationMs() / 1000));
+		obs_data_set_int(item, "speed_percent", static_cast<long long>(segment.speedPercent));
+		obs_data_array_push_back(segments, item);
+		obs_data_release(item);
+	}
+	obs_data_set_array(data, "timeline", segments);
+	obs_data_array_release(segments);
 	(void)obs_data_save_json_safe(data, path, "tmp", "bak");
 	obs_data_release(data);
 	bfree(path);
+}
+
+void ReplayEngine::pollBridgeCommand()
+{
+	char *path = obs_module_config_path("secretariatpro-command.json");
+	if (!path)
+		return;
+	obs_data_t *command = obs_data_create_from_json_file_safe(path, "bak");
+	bfree(path);
+	if (!command)
+		return;
+	const std::string commandId = obs_data_get_string(command, "command_id");
+	if (commandId.empty() || commandId == lastCommandId_) {
+		obs_data_release(command);
+		return;
+	}
+	const std::string action = obs_data_get_string(command, "action");
+	bool ok = false;
+	if (action == "compose") {
+		clearTimeline();
+		obs_data_array_t *segments = obs_data_get_array(command, "segments");
+		const auto count = segments ? obs_data_array_count(segments) : 0;
+		ok = count > 0;
+		for (std::size_t index = 0; ok && index < count; ++index) {
+			obs_data_t *item = obs_data_array_item(segments, index);
+			const auto camera = static_cast<std::size_t>(std::max<long long>(1, obs_data_get_int(item, "camera")) - 1);
+			const int duration = static_cast<int>(obs_data_get_int(item, "duration_seconds"));
+			const int speed = static_cast<int>(obs_data_get_int(item, "speed_percent"));
+			ok = addSegment(camera, duration, speed);
+			obs_data_release(item);
+		}
+		if (segments)
+			obs_data_array_release(segments);
+		if (ok && obs_data_get_bool(command, "play_now"))
+			ok = take();
+	} else if (action == "clear_timeline") {
+		clearTimeline();
+		ok = true;
+	}
+	lastCommandId_ = commandId;
+	bridgeError_ = ok ? "" : "No se pudo aplicar la composición solicitada por Secretariat Pro Live";
+	writeBridgeState();
+	obs_data_release(command);
 }
 
 bool ReplayEngine::addSegment(std::size_t cameraIndex, int durationSeconds, int speedPercent)

@@ -1,5 +1,12 @@
 # Changelog
 
+## 0.5.0 — Quick compositions
+
+- Accepts atomic multicamera timelines from Secretariat Pro Live through the local bridge.
+- Reports the complete active timeline and command acknowledgement in bridge state.
+- Includes the 0.4.1 dock ownership fix that prevents a double deletion when OBS closes.
+- Keeps 100% and 50% replay segments compatible with the native plugin editor.
+
 ## 0.4.1 — fix crash on OBS exit
 
 - Removed the duplicate deletion of the replay widget after OBS removes its dock.

@@ -4,7 +4,7 @@ Native C++/Qt plugin for simple multicamera sports replays inside OBS Studio.
 
 Repository: <https://github.com/agarciarenones-source/SecretariatPro-Multicam-Replay>
 
-Version `0.4.0` connects the native OBS replay engine to SecretariatPro and keeps the canvas-aware rendering introduced in v0.3. It creates an independent ISO replay buffer for every configured source, saves all angles from the same event, builds a short cut sequence, supports 100% and 50% playback, lets the operator change angle while the replay is on air, and returns automatically to the previous live scene.
+Version `0.5.0` connects the native OBS replay engine to Secretariat Pro Live and keeps the canvas-aware rendering introduced in v0.3. It creates an independent ISO replay buffer for every configured source, saves all angles from the same event, accepts quick camera/speed compositions from Live, supports 100% and 50% playback, lets the operator change angle while the replay is on air, and returns automatically to the previous live scene.
 
 ## What is included
 
@@ -90,13 +90,13 @@ The macOS package must be signed and notarised before public distribution. Unsig
 The included GitHub Actions workflow builds a Windows x64 ZIP and a macOS universal PKG. This is the simplest route when you need both operating systems:
 
 1. Create an empty GitHub repository and upload the complete project, including the `.github` directory. GitHub Desktop is the easiest way to preserve that directory.
-2. Create and push a semantic beta tag such as `0.4.0-beta2`.
+2. Create and push a semantic beta tag such as `0.5.0-beta1`.
 3. Wait for both **Build for macOS** and **Build for Windows** to finish with a green check.
 4. Open the draft version under **Releases** and download the Windows and macOS installers.
 
 Manual builds are intentionally unsigned beta packages. The Windows artifact contains the normal OBS plugin directory; extract it into `%APPDATA%\obs-studio\plugins`. On macOS, open the PKG and, if Gatekeeper blocks this private beta, allow it from **System Settings → Privacy & Security**. Public distribution requires an Apple Developer signature and notarisation.
 
-A semantic version tag such as `0.3.0-beta1` creates a draft release.
+A semantic version tag such as `0.5.0-beta1` creates a draft release.
 
 ### First use in OBS
 
@@ -124,7 +124,7 @@ When OBS loads the plugin, it writes `secretariatpro-bridge.json` atomically in 
 
 OBS WebSocket must be enabled and connected in SecretariatPro. No extra network port or third-party service is used by the bridge.
 
-## Current v0.4 limitations
+## Current v0.5 limitations
 
 - The generated MKV clips remain in the plugin configuration directory. Automatic retention and purge policy are planned next.
 - The saved files contain programme audio, but replay playback is muted in this release. The previous live scene remains nested beneath the replay picture so its commentary and ambience continue.
