@@ -19,7 +19,7 @@ std::int64_t Segment::playbackDurationMs() const noexcept
 
 bool Segment::valid() const noexcept
 {
-	return inMs >= 0 && outMs > inMs && (speedPercent == 50 || speedPercent == 100);
+	return inMs >= 0 && outMs > inMs && (speedPercent == 25 || speedPercent == 50 || speedPercent == 75 || speedPercent == 100);
 }
 
 std::string Segment::label() const
@@ -44,7 +44,7 @@ bool Timeline::add(CameraIndex cameraIndex, std::int64_t sourceDurationMs, int s
 {
 	if (segments_.size() >= MaxSegments || sourceDurationMs <= 0 || cursorMs_ >= eventDurationMs_)
 		return false;
-	if (speedPercent != 50 && speedPercent != 100)
+	if (speedPercent != 25 && speedPercent != 50 && speedPercent != 75 && speedPercent != 100)
 		return false;
 
 	const auto end = std::min(eventDurationMs_, cursorMs_ + sourceDurationMs);

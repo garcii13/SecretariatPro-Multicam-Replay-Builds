@@ -1,3 +1,4 @@
+#include <QFileInfo>
 #include "replay-engine.hpp"
 #include "replay-media-provider.hpp"
 #include "plugin-support.h"
@@ -143,13 +144,14 @@ void ReplayEngine::updateSettings(const Settings &settings)
 
 void ReplayEngine::rebuildCaptures()
 {
+	const auto generation = ++captureGeneration_;
 	captures_.clear();
 	captures_.reserve(settings_.sourceUuids.size());
 	for (std::size_t index = 0; index < settings_.sourceUuids.size(); ++index) {
 		auto capture = std::make_unique<IsoCapture>(static_cast<int>(index));
-		capture->setSavedCallback([this](int cameraIndex, const std::string &path) {
+		capture->setSavedCallback([this, generation](int cameraIndex, const std::string &path) {
 			QMetaObject::invokeMethod(
-				this, [this, cameraIndex, path]() { handleCaptureSaved(cameraIndex, path); },
+				this, [this, generation, cameraIndex, path]() { if (generation == captureGeneration_) handleCaptureSaved(cameraIndex, path); },
 				Qt::QueuedConnection);
 		});
 		captures_.push_back(std::move(capture));
@@ -288,6 +290,10 @@ bool ReplayEngine::buffersActive() const noexcept
 
 bool ReplayEngine::markReplay()
 {
+	if (playing_ || returningLive_ || !pendingFileCommand_.empty()) {
+		emit errorRaised(QStringLiteral("Espera a volver al directo antes de marcar otro evento."));
+		return false;
+	}
 	if (!buffersActive_) {
 		emit errorRaised(QStringLiteral("Activa primero el búfer multicámara."));
 		return false;
@@ -297,10 +303,21 @@ bool ReplayEngine::markReplay()
 		return false;
 	}
 
+	libraryPlayback_ = false;
 	bridgeError_.clear();
 	saving_ = true;
 	eventReady_ = false;
 	++eventSerial_;
+	const auto serial = eventSerial_;
+	QTimer::singleShot(25000, this, [this, serial]() {
+		if (!saving_ || eventSerial_ != serial) return;
+		// A missing camera callback must not permanently lock every later mark.
+		stopBuffers();
+		rebuildCaptures();
+		const bool restarted = startBuffers();
+		if (!restarted) return;
+		emit errorRaised(QStringLiteral("Una cámara no terminó de guardar. Búfer reiniciado; vuelve a marcar cuando tenga vídeo."));
+	});
 	savedPaths_.assign(captures_.size(), {});
 	emit savingStateChanged(true);
 	emit eventStateChanged(false);
@@ -337,13 +354,16 @@ void ReplayEngine::writeBridgeState() const
 	if (!path)
 		return;
 	obs_data_t *data = obs_data_create();
-	obs_data_set_int(data, "schema", 1);
+	obs_data_set_int(data, "schema", 2);
+	obs_data_set_bool(data, "library_playback", libraryPlayback_);
+	obs_data_set_int(data, "event_duration_ms", timeline_.eventDurationMs());
 	obs_data_set_string(data, "plugin_version", PLUGIN_VERSION);
 	obs_data_set_bool(data, "loaded", bridgeLoaded_);
 	obs_data_set_bool(data, "buffers_active", buffersActive_);
 	obs_data_set_bool(data, "saving", saving_);
 	obs_data_set_bool(data, "event_ready", eventReady_);
 	obs_data_set_bool(data, "playing", playing_);
+	obs_data_set_bool(data, "returning_live", returningLive_);
 	obs_data_set_int(data, "event_serial", static_cast<long long>(eventSerial_));
 	obs_data_set_int(data, "active_camera", static_cast<long long>(activeCamera_));
 	obs_data_set_int(data, "camera_count", static_cast<long long>(settings_.sourceUuids.size()));
@@ -408,6 +428,10 @@ void ReplayEngine::cleanupTemporaryMedia()
 
 void ReplayEngine::pollBridgeCommand()
 {
+	static unsigned heartbeatTicks = 0;
+	if (++heartbeatTicks % 7 == 0) writeBridgeState();
+	if (!pendingFileCommand_.empty())
+		return;
 	char *path = obs_module_config_path("secretariatpro-command.json");
 	if (!path)
 		return;
@@ -422,11 +446,30 @@ void ReplayEngine::pollBridgeCommand()
 	}
 	const std::string action = obs_data_get_string(command, "action");
 	bool ok = false;
-	if (action == "compose") {
-		clearTimeline();
+	if (action == "play_file" && !playing_ && !saving_) {
+		const std::string file = obs_data_get_string(command, "path");
+		if (!file.empty() && QFileInfo(QString::fromStdString(file)).isFile()) {
+			pendingFileCommand_ = commandId;
+			libraryPlayback_ = true;
+			eventReady_ = false;
+			savedPaths_ = {file};
+			loadEventMedia();
+			obs_data_release(command);
+			return;
+		}
+	} else if (action == "compose" && !playing_ && !libraryPlayback_) {
+		const Timeline previous = timeline_;
 		obs_data_array_t *segments = obs_data_get_array(command, "segments");
 		const auto count = segments ? obs_data_array_count(segments) : 0;
-		ok = count > 0;
+		std::int64_t requested = 0;
+		for (std::size_t index = 0; index < count; ++index) {
+			obs_data_t *item = obs_data_array_item(segments, index);
+			requested += obs_data_get_int(item, "duration_seconds") * 1000;
+			obs_data_release(item);
+		}
+		ok = count > 0 && count <= Timeline::MaxSegments && requested <= timeline_.eventDurationMs();
+		if (ok)
+			timeline_.reset(timeline_.eventDurationMs(), requested);
 		for (std::size_t index = 0; ok && index < count; ++index) {
 			obs_data_t *item = obs_data_array_item(segments, index);
 			const auto camera = static_cast<std::size_t>(std::max<long long>(1, obs_data_get_int(item, "camera")) - 1);
@@ -437,6 +480,8 @@ void ReplayEngine::pollBridgeCommand()
 		}
 		if (segments)
 			obs_data_array_release(segments);
+		if (!ok)
+			timeline_ = previous;
 		if (ok && obs_data_get_bool(command, "play_now"))
 			ok = take();
 	} else if (action == "cleanup") {
@@ -540,7 +585,9 @@ void ReplayEngine::out()
 	}
 
 	if (previousScene_) {
+		returningLive_ = true;
 		obs_frontend_set_current_scene(previousScene_);
+		QTimer::singleShot(20, this, [this]() { confirmLiveReturn(); });
 		obs_source_release(previousScene_);
 		previousScene_ = nullptr;
 	}
@@ -549,6 +596,19 @@ void ReplayEngine::out()
 		emit playbackStateChanged(false);
 		emit statusChanged(QStringLiteral("Directo restaurado"));
 	}
+}
+
+void ReplayEngine::confirmLiveReturn()
+{
+	obs_source_t *transition = obs_frontend_get_current_transition();
+	const float progress = transition ? obs_transition_get_time(transition) : 0.0f;
+	if (transition) obs_source_release(transition);
+	if (progress > 0.0f && progress < 1.0f) {
+		QTimer::singleShot(20, this, [this]() { confirmLiveReturn(); });
+		return;
+	}
+	returningLive_ = false;
+	writeBridgeState();
 }
 
 void ReplayEngine::switchCamera(std::size_t cameraIndex)
@@ -618,6 +678,7 @@ void ReplayEngine::loadEventMedia()
 				obs_source_release(source);
 			}
 		}
+		if (!pendingFileCommand_.empty()) lastCommandId_ = std::exchange(pendingFileCommand_, {});
 		emit errorRaised(QStringLiteral(
 			"OBS guardó los clips, pero no pudo abrir todas las cámaras como fuentes multimedia."));
 		return;
@@ -650,16 +711,23 @@ void ReplayEngine::pollMediaDuration(int attemptsRemaining)
 		duration = std::min(duration, cameraDuration);
 	}
 	if (duration > 0) {
-		timeline_.reset(duration, static_cast<std::int64_t>(settings_.replayWindowSeconds) * 1000);
+		timeline_.reset(duration, libraryPlayback_ ? duration : static_cast<std::int64_t>(settings_.replayWindowSeconds) * 1000);
 		eventReady_ = true;
 		setActiveCamera(0);
 		emit eventStateChanged(true);
 		emit timelineChanged();
 		emit statusChanged(
 			QString("Repetición preparada · %1 s disponibles").arg(duration / 1000.0, 0, 'f', 1));
+		if (!pendingFileCommand_.empty()) {
+			const bool launched = take();
+			lastCommandId_ = std::exchange(pendingFileCommand_, {});
+			bridgeError_ = launched ? "" : "No se pudo lanzar el vídeo guardado";
+			writeBridgeState();
+		}
 		return;
 	}
 	if (attemptsRemaining <= 0) {
+		if (!pendingFileCommand_.empty()) lastCommandId_ = std::exchange(pendingFileCommand_, {});
 		emit errorRaised(QStringLiteral("Los clips se guardaron, pero OBS no pudo determinar su duración."));
 		return;
 	}
@@ -795,7 +863,7 @@ void ReplayEngine::pollPlayback()
 	if (!source)
 		return;
 	const auto time = obs_source_media_get_time(source);
-	if (time >= segment.outMs - 15)
+	if (time >= segment.outMs - 15 || obs_source_media_get_state(source) == OBS_MEDIA_STATE_ENDED)
 		applySegment(segmentIndex_ + 1);
 }
 
@@ -809,6 +877,8 @@ void ReplayEngine::setMediaSpeedAndTime(int speedPercent, std::int64_t timeMs)
 		obs_data_set_int(settings, "speed_percent", speedPercent);
 		obs_source_update(source, settings);
 		obs_data_release(settings);
+		if (obs_source_media_get_state(source) == OBS_MEDIA_STATE_ENDED || obs_source_media_get_state(source) == OBS_MEDIA_STATE_STOPPED)
+			obs_source_media_restart(source);
 		obs_source_media_set_time(source, timeMs);
 		obs_source_media_play_pause(source, false);
 	}

@@ -76,6 +76,7 @@ private:
 	void handleCaptureSaved(int cameraIndex, const std::string &path);
 	void loadEventMedia();
 	void pollMediaDuration(int attemptsRemaining);
+	void confirmLiveReturn();
 	void releaseMedia();
 	[[nodiscard]] obs_source_t *createMediaSource(int cameraIndex, const std::string &path);
 	[[nodiscard]] bool ensureReplayScene(obs_source_t *liveScene);
@@ -104,10 +105,14 @@ private:
 	mutable std::mutex mediaMutex_;
 	bool buffersActive_{false};
 	bool saving_{false};
+	std::uint64_t captureGeneration_{0};
 	bool eventReady_{false};
 	bool playing_{false};
+	bool returningLive_{false};
 	bool bridgeLoaded_{true};
 	std::uint64_t eventSerial_{0};
+	std::string pendingFileCommand_;
+	bool libraryPlayback_{false};
 	std::string lastCommandId_;
 	std::string bridgeStatus_;
 	std::string bridgeError_;

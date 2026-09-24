@@ -24,7 +24,7 @@ int main()
 
 	CHECK(timeline.removeLast());
 	CHECK(timeline.cursorMs() == 24'000);
-	CHECK(!timeline.add(1, 1'000, 25));
+	CHECK(!timeline.add(1, 1'000, 30));
 
 	timeline.clear();
 	for (std::size_t i = 0; i < Timeline::MaxSegments; ++i)
@@ -37,6 +37,11 @@ int main()
 	CHECK(clamped.add(0, 20'000, 100));
 	CHECK(clamped.segments().front().outMs == 8'000);
 	CHECK(!clamped.add(1, 1'000, 100));
+
+	Timeline speeds;
+	speeds.reset(30'000, 12'000);
+	for (const int speed : {100,75,50,25}) CHECK(speeds.add(0, 3'000, speed));
+	CHECK(speeds.playbackDurationMs() == 25'000);
 
 	std::cout << "timeline-tests: OK\n";
 	return 0;

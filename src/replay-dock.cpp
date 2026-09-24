@@ -140,11 +140,13 @@ void ReplayDock::buildUi()
 	auto *segmentControls = new QGridLayout;
 	segmentCamera_ = new QComboBox;
 	segmentSeconds_ = new QSpinBox;
-	segmentSeconds_->setRange(1, 10);
+	segmentSeconds_->setRange(1, 60);
 	segmentSeconds_->setSuffix(" s");
 	speed_ = new QComboBox;
 	speed_->addItem("100 %", 100);
+	speed_->addItem("75 %", 75);
 	speed_->addItem("50 % · cámara lenta", 50);
+	speed_->addItem("25 %", 25);
 	addSegmentButton_ = makeAction("+ AÑADIR PLANO");
 	segmentControls->addWidget(new QLabel("Cámara"), 0, 0);
 	segmentControls->addWidget(segmentCamera_, 0, 1);
