@@ -49,10 +49,13 @@ bool IsoCapture::start(obs_source_t *source, const std::string &encoderId, const
 	obs_data_set_int(videoSettings, "bitrate", bitrateKbps);
 	obs_data_set_int(videoSettings, "keyint_sec", 1);
 	obs_data_set_int(videoSettings, "bf", 0);
-	obs_data_set_string(videoSettings, "preset", "veryfast");
 	obs_data_set_string(videoSettings, "profile", "high");
-	obs_data_set_string(videoSettings, "tune", "zerolatency");
-	obs_data_set_int(videoSettings, "threads", 2);
+	obs_data_set_bool(videoSettings, "bframes", false);
+	if (encoderId == "obs_x264") {
+		obs_data_set_string(videoSettings, "preset", "veryfast");
+		obs_data_set_string(videoSettings, "tune", "zerolatency");
+		obs_data_set_int(videoSettings, "threads", 2);
+	}
 
 	const std::string videoName = "SP Replay CAM " + std::to_string(cameraIndex_ + 1) + " Video";
 	videoEncoder_ = obs_video_encoder_create(encoderId.c_str(), videoName.c_str(), videoSettings, nullptr);

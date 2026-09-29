@@ -161,6 +161,11 @@ jobs:
           codesign: ${{ fromJSON(needs.check-event.outputs.codesign) }}
           codesignIdent: ${{ steps.codesign.outputs.codesignIdent }}
 
+      - name: Test replay and encoder selection
+        run: |
+          cmake --build build_macos --config ${{ needs.check-event.outputs.config }} --target secretariatpro-encoder-policy-tests secretariatpro-replay-timeline-tests secretariatpro-replay-layout-tests
+          ctest --test-dir build_macos -C ${{ needs.check-event.outputs.config }} --output-on-failure
+
       - name: Package Plugin 📀
         uses: ./.github/actions/package-plugin
         with:
@@ -303,6 +308,11 @@ jobs:
         with:
           target: x64
           config: ${{ needs.check-event.outputs.config }}
+
+      - name: Test replay and encoder selection
+        run: |
+          ctest --test-dir build_x64 -C ${{ needs.check-event.outputs.config }} --output-on-failure
+          if ($LASTEXITCODE -ne 0) { throw 'Replay tests failed.' }
 
       - name: Package Plugin 📀
         uses: ./.github/actions/package-plugin

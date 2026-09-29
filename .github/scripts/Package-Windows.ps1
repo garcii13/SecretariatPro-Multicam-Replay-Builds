@@ -47,25 +47,13 @@ function Package {
     $ProductName = $BuildSpec.name
     $ProductVersion = $BuildSpec.version
 
-    $OutputName = "${ProductName}-${ProductVersion}-windows-${Target}"
-
-    $RemoveArgs = @{
-        ErrorAction = 'SilentlyContinue'
-        Path = @(
-            "${ProjectRoot}/release/${ProductName}-*-windows-*.zip"
-        )
+    $Iscc = "${env:ProgramFiles(x86)}\Inno Setup 6\ISCC.exe"
+    if (-not (Test-Path $Iscc)) {
+        throw 'Inno Setup 6 is required to build the Windows installer.'
     }
+    & $Iscc "/DVersion=$ProductVersion" "/DConfiguration=$Configuration" "${ProjectRoot}/packaging/windows.iss"
+    if ($LASTEXITCODE -ne 0) { throw 'Windows installer compilation failed.' }
 
-    Remove-Item @RemoveArgs
-
-    Log-Group "Archiving ${ProductName}..."
-    $CompressArgs = @{
-        Path = (Get-ChildItem -Path "${ProjectRoot}/release/${Configuration}" -Exclude "${OutputName}*.*")
-        CompressionLevel = 'Optimal'
-        DestinationPath = "${ProjectRoot}/release/${OutputName}.zip"
-        Verbose = ($Env:CI -ne $null)
-    }
-    Compress-Archive -Force @CompressArgs
     Log-Group
 }
 

@@ -1,5 +1,6 @@
 #include <QFileInfo>
 #include "replay-engine.hpp"
+#include "encoder-policy.hpp"
 #include "replay-media-provider.hpp"
 #include "plugin-support.h"
 
@@ -198,6 +199,17 @@ bool ReplayEngine::startBuffers()
 {
 	bridgeError_.clear();
 	stopBuffers();
+	std::string encoderId = settings_.encoderId;
+	if (encoderId == "auto_hardware") {
+		std::vector<std::string> available;
+		for (const auto &option : availableVideoEncoders())
+			available.push_back(option.id);
+		encoderId = automaticHardwareEncoder(available);
+		if (encoderId.empty()) {
+			emit errorRaised(QStringLiteral("No hay un codificador H.264 de hardware compatible. Selecciona un codificador en el panel de repeticiones."));
+			return false;
+		}
+	}
 	releaseMedia();
 	eventReady_ = false;
 	timeline_.clear();
@@ -243,7 +255,7 @@ bool ReplayEngine::startBuffers()
 	bool started = true;
 	std::size_t failedIndex = 0;
 	for (std::size_t index = 0; index < captures_.size(); ++index) {
-		if (!captures_[index]->start(sources[index], settings_.encoderId, directory, settings_.bufferSeconds,
+		if (!captures_[index]->start(sources[index], encoderId, directory, settings_.bufferSeconds,
 					     settings_.bitrateKbps)) {
 			started = false;
 			failedIndex = index;

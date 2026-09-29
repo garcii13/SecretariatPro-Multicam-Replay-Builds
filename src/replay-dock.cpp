@@ -298,6 +298,7 @@ void ReplayDock::populateEncoders()
 {
 	const QSignalBlocker blocker(encoder_);
 	encoder_->clear();
+	encoder_->addItem(QStringLiteral("Automático · H.264 por hardware"), QStringLiteral("auto_hardware"));
 	for (const auto &option : engine_->availableVideoEncoders())
 		encoder_->addItem(QString::fromStdString(option.name), QString::fromStdString(option.id));
 }

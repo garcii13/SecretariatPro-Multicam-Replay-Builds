@@ -64,6 +64,12 @@ Settings SettingsStore::load()
 	const char *encoder = obs_data_get_string(data, "encoder_id");
 	if (encoder && *encoder)
 		settings.encoderId = encoder;
+#ifdef __APPLE__
+	// Older releases silently defaulted to x264 for every ISO camera. Migrate
+	// that legacy default once; explicit choices saved by this version remain.
+	if (!obs_data_has_user_value(data, "encoder_policy_version") && settings.encoderId == "obs_x264")
+		settings.encoderId = "auto_hardware";
+#endif
 	const char *scene = obs_data_get_string(data, "replay_scene");
 	if (scene && *scene)
 		settings.replaySceneName = scene;
@@ -101,6 +107,7 @@ bool SettingsStore::save(const Settings &settings)
 	obs_data_set_array(data, "camera_uuids", cameras);
 	obs_data_array_release(cameras);
 	obs_data_set_string(data, "encoder_id", settings.encoderId.c_str());
+	obs_data_set_int(data, "encoder_policy_version", 1);
 	obs_data_set_string(data, "replay_scene", settings.replaySceneName.c_str());
 	obs_data_set_int(data, "buffer_seconds", settings.bufferSeconds);
 	obs_data_set_int(data, "replay_window_seconds", settings.replayWindowSeconds);

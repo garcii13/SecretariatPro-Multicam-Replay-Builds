@@ -7,7 +7,7 @@ namespace sp::replay {
 
 struct Settings {
 	std::vector<std::string> sourceUuids{2};
-	std::string encoderId{"obs_x264"};
+	std::string encoderId{"auto_hardware"};
 	std::string replaySceneName{"SP Replay"};
 	int bufferSeconds{30};
 	int replayWindowSeconds{10};

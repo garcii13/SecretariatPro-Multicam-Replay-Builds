@@ -1,5 +1,12 @@
 # Changelog
 
+## 0.6.1 — Hardware encoder selection
+
+- Prefer registered H.264 hardware encoders automatically for ISO camera buffers.
+- Report missing hardware explicitly; retain manual x264 selection.
+- Migrate the legacy macOS x264 default once and preserve subsequent choices.
+- Limit manual x264 threads and disable B-frames for ISO capture.
+
 ## 0.5.1 — Composer session cleanup
 
 - Releases replay media and clears temporary camera files on shutdown or when Live closes.
